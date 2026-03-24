@@ -82,3 +82,15 @@ with tab1:
             st.info("Carica dei prodotti dalla barra laterale per iniziare.")
 
     with col_b:
+        st.subheader("📊 Stato Magazzino")
+        st.dataframe(st.session_state.df, use_container_width=True, hide_index=True)
+
+with tab2:
+    st.subheader("📜 Registro Cronologico")
+    if not st.session_state.log.empty:
+        st.dataframe(st.session_state.log.iloc[::-1], use_container_width=True, hide_index=True)
+        # Tasto per scaricare i dati per la tua ricerca PhD
+        csv = st.session_state.log.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Scarica Report per Analisi PhD", csv, "report_performance_alain.csv", "text/csv")
+    else:
+        st.write("Nessuna distribuzione registrata finora.")
