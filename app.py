@@ -8,57 +8,77 @@ st.set_page_config(page_title="Al Ain FC - Performance Inventory", layout="wide"
 # Squadre predefinite
 SQUADRE = ["U14", "U15", "U16", "U17", "U19b", "U19a", "U21", "U23", "Staff"]
 
-# Funzione per caricare dati (D'ora in poi useremo i file del sito)
-@st.cache_data
-def load_initial_data():
-    return pd.DataFrame(columns=['Prodotto', 'Giacenza', 'Unita'])
-
+# Gestione Stato dei Dati (In attesa di collegamento Google Sheets)
 if 'df' not in st.session_state:
-    st.session_state.df = load_initial_data()
+    st.session_state.df = pd.DataFrame(columns=['Prodotto', 'Giacenza', 'Unita'])
 if 'log' not in st.session_state:
     st.session_state.log = pd.DataFrame(columns=['Data_Ora', 'Prodotto', 'Quantità', 'Squadra', 'Nota'])
 
 st.title("⚽ Al Ain FC - Inventory & Performance Log")
 
-# --- SIDEBAR ---
+# --- SIDEBAR: GESTIONE PRODOTTI ---
 with st.sidebar:
-    st.header("⚙️ Gestione")
-    with st.expander("📥 Carico Prodotti"):
+    st.header("⚙️ Pannello di Controllo")
+    
+    # 1. AGGIUNGI O CARICA
+    with st.expander("📥 Carico / Nuovo Prodotto"):
         with st.form("carico"):
             n = st.text_input("Nome Prodotto")
             q = st.number_input("Quantità", min_value=0)
             u = st.selectbox("Unità", ["g", "capsule", "gel", "barrette", "unità"])
-            if st.form_submit_button("Aggiungi"):
-                if n in st.session_state.df['Prodotto'].values:
-                    st.session_state.df.loc[st.session_state.df['Prodotto'] == n, 'Giacenza'] += q
-                else:
-                    new_row = pd.DataFrame([[n, q, u]], columns=['Prodotto', 'Giacenza', 'Unita'])
-                    st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
+            if st.form_submit_button("Registra"):
+                if n:
+                    if n in st.session_state.df['Prodotto'].values:
+                        st.session_state.df.loc[st.session_state.df['Prodotto'] == n, 'Giacenza'] += q
+                    else:
+                        new_row = pd.DataFrame([[n, q, u]], columns=['Prodotto', 'Giacenza', 'Unita'])
+                        st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
+                    st.rerun()
+
+    # 2. RINOMINA O ELIMINA (Ripristinati!)
+    if not st.session_state.df.empty:
+        with st.expander("📝 Modifica / Elimina"):
+            p_edit = st.selectbox("Seleziona Prodotto", st.session_state.df['Prodotto'].unique())
+            nuovo_nome = st.text_input("Nuovo Nome (opzionale)")
+            
+            col1, col2 = st.columns(2)
+            if col1.button("Rinomina"):
+                if nuovo_nome:
+                    # Aggiorna in inventario
+                    st.session_state.df.loc[st.session_state.df['Prodotto'] == p_edit, 'Prodotto'] = nuovo_nome
+                    # Aggiorna anche nello storico per coerenza
+                    st.session_state.log.loc[st.session_state.log['Prodotto'] == p_edit, 'Prodotto'] = nuovo_nome
+                    st.rerun()
+            
+            if col2.button("Elimina"):
+                st.session_state.df = st.session_state.df[st.session_state.df['Prodotto'] != p_edit]
                 st.rerun()
 
-# --- MAIN ---
-t1, t2 = st.tabs(["🚀 Distribuzione", "📜 Storico"])
+# --- MAIN INTERFACE ---
+tab1, tab2 = st.tabs(["🚀 Distribuzione", "📜 Storico Distribuzioni"])
 
-with t1:
+with tab1:
     col_a, col_b = st.columns([1, 1.2])
     with col_a:
+        st.subheader("📤 Registra Consegna")
         if not st.session_state.df.empty:
             with st.form("dist"):
-                p = st.selectbox("Prodotto", st.session_state.df['Prodotto'].unique())
+                p = st.selectbox("Cosa stai consegnando?", st.session_state.df['Prodotto'].unique())
                 qd = st.number_input("Quantità", min_value=1)
-                sq = st.selectbox("Squadra", SQUADRE)
-                nt = st.text_input("Note")
-                if st.form_submit_button("Registra"):
+                sq = st.selectbox("A quale squadra?", SQUADRE)
+                nt = st.text_input("Note (es. Pre-partita, Recupero)")
+                if st.form_submit_button("Conferma Distribuzione"):
                     idx = st.session_state.df[st.session_state.df['Prodotto'] == p].index[0]
                     if st.session_state.df.at[idx, 'Giacenza'] >= qd:
                         st.session_state.df.at[idx, 'Giacenza'] -= qd
                         new_log = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), p, qd, sq, nt]], 
                                                columns=['Data_Ora', 'Prodotto', 'Quantità', 'Squadra', 'Nota'])
                         st.session_state.log = pd.concat([st.session_state.log, new_log], ignore_index=True)
-                        st.success("Registrato!")
+                        st.success(f"Consegnato {qd} {p} alla {sq}!")
                         st.rerun()
-    with col_b:
-        st.dataframe(st.session_state.df, use_container_width=True, hide_index=True)
+                    else:
+                        st.error("Giacenza insufficiente!")
+        else:
+            st.info("Carica dei prodotti dalla barra laterale per iniziare.")
 
-with t2:
-    st.dataframe(st.session_state.log.iloc[::-1], use_container_width=True, hide_index=True)
+    with col_b:
